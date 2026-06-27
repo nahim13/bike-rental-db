@@ -11,7 +11,7 @@ For the authoritative SQL Server run, see tests/test_bike_rental.sql (tSQLt).
 
 import sqlite3
 import pytest
-from datetime import datetime, timedelta, timezone, timezone
+from datetime import datetime, timedelta, timezone
 
 # ── Schema (SQLite-compatible translation) ───────────────────────────────────
 
@@ -620,3 +620,189 @@ class TestRentsTable:
         db.commit()
         count = db.execute("SELECT COUNT(*) FROM Rents WHERE bicycle_id = 1 AND renter_id = 1").fetchone()[0]
         assert count == 2
+
+
+# ── Security / Role Permissions ───────────────────────────────────────────────
+# security.sql defines three roles with different permission levels:
+#   ManagerRole  — full SELECT/INSERT/UPDATE/DELETE on all tables
+#   StaffRole    — SELECT on all tables + INSERT/UPDATE on Rental, Renter, Payment
+#   AnalystRole  — SELECT only on all tables
+#
+# SQLite has no user/role system, so permissions are enforced by separate
+# connection helpers that mirror what each role can and cannot do.
+# Each helper raises PermissionError when the role attempts a forbidden operation.
+
+class RoleConnection:
+    """Wraps a sqlite3 connection and enforces role-based operation restrictions."""
+
+    STAFF_WRITE_TABLES  = {'Rental', 'Renter', 'Payment'}
+    READONLY_OPERATIONS = {'INSERT', 'UPDATE', 'DELETE'}
+
+    def __init__(self, conn: sqlite3.Connection, role: str):
+        self._conn = conn
+        self._role = role
+
+    def execute(self, sql: str, params=()):
+        op = sql.strip().split()[0].upper()
+        # Determine target table (second word for INSERT/DELETE/UPDATE)
+        words = sql.strip().split()
+        table = None
+        if op == 'INSERT' and len(words) >= 3:
+            table = words[2]   # INSERT INTO <table>
+        elif op in ('UPDATE', 'DELETE') and len(words) >= 2:
+            table = words[1]   # UPDATE <table> / DELETE FROM <table> → words[2]
+            if op == 'DELETE':
+                table = words[2] if len(words) > 2 else None
+
+        if self._role == 'ManagerRole':
+            pass  # full access
+
+        elif self._role == 'StaffRole':
+            if op == 'DELETE':
+                raise PermissionError(f"StaffRole cannot DELETE")
+            if op in ('INSERT', 'UPDATE') and table not in self.STAFF_WRITE_TABLES:
+                raise PermissionError(
+                    f"StaffRole cannot {op} on {table}"
+                )
+
+        elif self._role == 'AnalystRole':
+            if op in self.READONLY_OPERATIONS:
+                raise PermissionError(
+                    f"AnalystRole cannot {op} (read-only)"
+                )
+
+        return self._conn.execute(sql, params)
+
+    def commit(self):
+        self._conn.commit()
+
+
+class TestSecurity:
+
+    # ── ManagerRole ───────────────────────────────────────────────────────────
+
+    def test_manager_can_select_any_table(self, db):
+        mgr = RoleConnection(db, 'ManagerRole')
+        row = mgr.execute("SELECT COUNT(*) FROM Bicycle").fetchone()
+        assert row[0] >= 0
+
+    def test_manager_can_insert_bicycle(self, db):
+        mgr = RoleConnection(db, 'ManagerRole')
+        mgr.execute(
+            "INSERT INTO Bicycle (model, type, status, price_per_hour, location_id, supplier_id, added_by) "
+            "VALUES ('Test Bike', 'City', 'Available', 50.00, 1, 1, 1)"
+        )
+        mgr.commit()
+        count = db.execute("SELECT COUNT(*) FROM Bicycle").fetchone()[0]
+        assert count == 3
+
+    def test_manager_can_update_bicycle(self, db):
+        mgr = RoleConnection(db, 'ManagerRole')
+        mgr.execute("UPDATE Bicycle SET status = 'Maintenance' WHERE bicycle_id = 1")
+        mgr.commit()
+        status = db.execute("SELECT status FROM Bicycle WHERE bicycle_id = 1").fetchone()[0]
+        assert status == 'Maintenance'
+
+    def test_manager_can_delete_bicycle(self, db):
+        mgr = RoleConnection(db, 'ManagerRole')
+        mgr.execute("DELETE FROM Bicycle WHERE bicycle_id = 2")
+        mgr.commit()
+        row = db.execute("SELECT bicycle_id FROM Bicycle WHERE bicycle_id = 2").fetchone()
+        assert row is None
+
+    # ── StaffRole ─────────────────────────────────────────────────────────────
+
+    def test_staff_can_select_any_table(self, db):
+        staff = RoleConnection(db, 'StaffRole')
+        row = staff.execute("SELECT COUNT(*) FROM Bicycle").fetchone()
+        assert row[0] >= 0
+
+    def test_staff_can_insert_rental(self, db):
+        staff = RoleConnection(db, 'StaffRole')
+        staff.execute(
+            "INSERT INTO Rental (renter_id, bicycle_id, rented_at, return_due_at, status) "
+            "VALUES (1, 1, ?, ?, 'Ongoing')", (now(), future())
+        )
+        staff.commit()
+        count = db.execute("SELECT COUNT(*) FROM Rental").fetchone()[0]
+        assert count == 1
+
+    def test_staff_can_update_rental(self, db):
+        db.execute(
+            "INSERT INTO Rental (renter_id, bicycle_id, rented_at, return_due_at, status) "
+            "VALUES (1, 1, ?, ?, 'Ongoing')", (now(), future())
+        )
+        db.commit()
+        staff = RoleConnection(db, 'StaffRole')
+        staff.execute("UPDATE Rental SET status = 'Overdue' WHERE rental_id = 1")
+        staff.commit()
+        status = db.execute("SELECT status FROM Rental WHERE rental_id = 1").fetchone()[0]
+        assert status == 'Overdue'
+
+    def test_staff_can_insert_renter(self, db):
+        staff = RoleConnection(db, 'StaffRole')
+        staff.execute(
+            "INSERT INTO Renter (full_name, email, phone, password) "
+            "VALUES ('New Renter', 'new@renter.com', '0900000099', 'hash')"
+        )
+        staff.commit()
+        count = db.execute("SELECT COUNT(*) FROM Renter").fetchone()[0]
+        assert count == 2
+
+    def test_staff_can_insert_payment(self, db):
+        db.execute(
+            "INSERT INTO Rental (renter_id, bicycle_id, rented_at, return_due_at, status) "
+            "VALUES (1, 1, ?, ?, 'Ongoing')", (now(), future())
+        )
+        db.commit()
+        staff = RoleConnection(db, 'StaffRole')
+        staff.execute(
+            "INSERT INTO Payment (renter_id, rental_id, amount, payment_method, status) "
+            "VALUES (1, 1, 100.00, 'Cash', 'Pending')"
+        )
+        staff.commit()
+        count = db.execute("SELECT COUNT(*) FROM Payment").fetchone()[0]
+        assert count == 1
+
+    def test_staff_cannot_insert_bicycle(self, db):
+        staff = RoleConnection(db, 'StaffRole')
+        with pytest.raises(PermissionError):
+            staff.execute(
+                "INSERT INTO Bicycle (model, type, status, price_per_hour, location_id, supplier_id, added_by) "
+                "VALUES ('X', 'City', 'Available', 50.00, 1, 1, 1)"
+            )
+
+    def test_staff_cannot_update_bicycle(self, db):
+        staff = RoleConnection(db, 'StaffRole')
+        with pytest.raises(PermissionError):
+            staff.execute("UPDATE Bicycle SET status = 'Maintenance' WHERE bicycle_id = 1")
+
+    def test_staff_cannot_delete_any_record(self, db):
+        staff = RoleConnection(db, 'StaffRole')
+        with pytest.raises(PermissionError):
+            staff.execute("DELETE FROM Rental WHERE rental_id = 1")
+
+    # ── AnalystRole ───────────────────────────────────────────────────────────
+
+    def test_analyst_can_select_any_table(self, db):
+        analyst = RoleConnection(db, 'AnalystRole')
+        row = analyst.execute("SELECT COUNT(*) FROM Bicycle").fetchone()
+        assert row[0] >= 0
+
+    def test_analyst_cannot_insert(self, db):
+        analyst = RoleConnection(db, 'AnalystRole')
+        with pytest.raises(PermissionError):
+            analyst.execute(
+                "INSERT INTO Renter (full_name, email, phone, password) "
+                "VALUES ('X', 'x@x.com', '0000', 'hash')"
+            )
+
+    def test_analyst_cannot_update(self, db):
+        analyst = RoleConnection(db, 'AnalystRole')
+        with pytest.raises(PermissionError):
+            analyst.execute("UPDATE Bicycle SET status = 'Maintenance' WHERE bicycle_id = 1")
+
+    def test_analyst_cannot_delete(self, db):
+        analyst = RoleConnection(db, 'AnalystRole')
+        with pytest.raises(PermissionError):
+            analyst.execute("DELETE FROM Bicycle WHERE bicycle_id = 1")
