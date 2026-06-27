@@ -5,9 +5,9 @@ INSERT INTO Location (name, address, contact_person) VALUES
 ('Addis Ababa Branch', 'Bole Subcity, Addis Ababa', 'Abebe Kelemu'),
 ('Mekelle Branch', 'Ayder Area, Mekelle', 'Saba Girmay');
 
-INSERT INTO Supplier (name, company_name, email, phone, address) VALUES 
-('Mulugeta Alemu', 'EthioBike Supplies', 'mulugeta.alemu@gmail.com', '+251911223344', 'Kality Zone, Block B'),
-('Saba Tadesse', 'Addis Bike Parts', 'saba.tadesse@gmail.com', '+251912334455', 'Arat Kilo');
+INSERT INTO Supplier (company_name, contact_name, email, phone, address) VALUES 
+('EthioBike Supplies', 'Mulugeta Alemu', 'mulugeta.alemu@gmail.com', '+251911223344', 'Kality Zone, Block B'),
+('Addis Bike Parts', 'Saba Tadesse', 'saba.tadesse@gmail.com', '+251912334455', 'Arat Kilo');
 
 INSERT INTO Accessory (type, price) VALUES 
 ('Helmet', 150.00),
@@ -15,16 +15,16 @@ INSERT INTO Accessory (type, price) VALUES
 ('Water Bottle', 70.00);
 
 INSERT INTO Manager (full_name, email, phone, password, qualifications) VALUES 
-('Birhanu Getachew', 'birhanu.getachew@gmail.com', '+251900112233', '$2b$12$K7vX6vExoO...', 'MBA, Addis Ababa University'),
-('Hirut Bekele', 'hirut.bekele@gmail.com', '+251900445566', '$2b$12$R9mY5wPzqI...', 'BSc Business Management');
+('Birhanu Getachew', 'birhanu.getachew@gmail.com', '+251900112233', 'secure_hash_mgr1', 'MBA, Addis Ababa University'),
+('Hirut Bekele', 'hirut.bekele@gmail.com', '+251900445566', 'secure_hash_mgr2', 'BSc Business Management');
 
 INSERT INTO Staff (full_name, email, phone, password, role, manager_id) VALUES 
-('Selamawit Kassa', 'selamawit.kassa@gmail.com', '+251911667788', 'hash_s1', 'Technician', 1),
-('Getnet Tesfaye', 'getnet.tesfaye@gmail.com', '+251911778899', 'hash_s2', 'Cashier', 2);
+('Selamawit Kassa', 'selamawit.kassa@gmail.com', '+251911667788', 'secure_hash_staff1', 'Technician', 1),
+('Getnet Tesfaye', 'getnet.tesfaye@gmail.com', '+251911778899', 'secure_hash_staff2', 'Cashier', 2);
 
 INSERT INTO Renter (full_name, email, phone, password, address) VALUES 
-('Abebe Bekele', 'abebe.bekele@gmail.com', '+251900334455', 'hash_r1', 'Bole, House 404'),
-('Mahiya Mohammed', 'mahiya.mohammed@gmail.com', '+251900556677', 'hash_r2', 'Mexico, Apart. 12');
+('Abebe Bekele', 'abebe.bekele@gmail.com', '+251900334455', 'secure_hash_user1', 'Bole, House 404'),
+('Mahiya Mohammed', 'mahiya.mohammed@gmail.com', '+251900556677', 'secure_hash_user2', 'Mexico, Apart. 12');
 
 INSERT INTO Bicycle (model, type, status, price_per_hour, location_id, supplier_id, accessory_id, added_by) VALUES 
 ('Mountain Master 2023', 'Mountain', 'Available', 120.00, 1, 1, 1, 1),
