@@ -1,14 +1,12 @@
 USE BICYCLE_RENTAL_SYSTEM;
 GO
 
--- Validates bike status and marks it as rented on new rental checkout
 CREATE TRIGGER trg_OnRental_Checkout
 ON Rental
 AFTER INSERT
 AS
 BEGIN
     SET NOCOUNT ON;
-    
     IF EXISTS (
         SELECT 1 FROM inserted i
         JOIN Bicycle b ON i.bicycle_id = b.bicycle_id
@@ -30,14 +28,12 @@ BEGIN
 END;
 GO
 
--- Reverts bike status to available and syncs history logs upon return
 CREATE TRIGGER trg_OnRental_Return
 ON Rental
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
-
     IF UPDATE(returned_at)
     BEGIN
         UPDATE b
@@ -59,7 +55,6 @@ BEGIN
 END;
 GO
 
--- Tracks changes and deletions made to the Bicycle inventory table
 CREATE TRIGGER trg_Bicycle_AuditLog
 ON Bicycle
 AFTER UPDATE, DELETE
@@ -79,7 +74,6 @@ BEGIN
 END;
 GO
 
--- Processes bicycle returns and dynamically generates the time-based invoice total
 CREATE PROCEDURE sp_ProcessReturn
     @RentalID INT
 AS
@@ -125,7 +119,6 @@ BEGIN
 END;
 GO
 
--- Live dashboard view displaying financial performance and fleet data per branch
 CREATE VIEW vw_BranchPerformanceMetrics AS
 SELECT 
     l.location_id,
