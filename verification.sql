@@ -34,6 +34,6 @@ WHERE bicycle_id = 1 AND status = 'Available';
 -- 6. Check real-time live performance metrics view
 SELECT * FROM vw_BranchPerformanceMetrics;
 
--- 7. Query the automated system security audit logs
+-- 7. Query system security audit logs
 SELECT * FROM AuditLog ORDER BY action_at DESC;
 GO
