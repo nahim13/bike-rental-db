@@ -6,7 +6,9 @@ Because SQLite doesn't support T-SQL triggers or stored procedures natively,
 the logic from trg_OnRental_Checkout, trg_OnRental_Return, and sp_ProcessReturn
 is replicated in Python helpers so every branching path is still exercised.
 
-For the authoritative SQL Server run, see tests/test_bike_rental.sql (tSQLt).
+For the authoritative T-SQL behavior, run programmability.sql against a real
+SQL Server instance — these triggers and the stored procedure can't be
+exercised natively in SQLite.
 """
 
 import sqlite3
